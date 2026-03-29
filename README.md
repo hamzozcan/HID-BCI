@@ -17,7 +17,7 @@ Move the cursor with eye motion, click with blinks, and hold/drag with a jaw cle
 8. [Signal Quality System](#8-signal-quality-system)
 9. [Serial Commands](#9-serial-commands)
 10. [LED States](#10-led-states)
-11. [Fine Tuning with configh](#11-fine-tuning-with-configh)
+11. [Fine Tuning with config.h](#11-fine-tuning-with-configh)
 12. [Troubleshooting](#12-troubleshooting)
 13. [System Architecture](#13-system-architecture)
 
