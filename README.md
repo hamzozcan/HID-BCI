@@ -226,10 +226,12 @@ First boot - calibration wizard starting.
 
 ### Step-by-step calibration
 
-**[1/6] BASELINE**
+The current firmware uses a 7-step calibration flow so both upward and downward gaze are measured explicitly.
+
+**[1/7] BASELINE**
 
 ```text
-[1/6] BASELINE  — Look straight ahead and relax.
+[1/7] BASELINE  — Look straight ahead and relax.
       Measuring for 2 seconds...
 ```
 
@@ -237,40 +239,49 @@ First boot - calibration wizard starting.
 - Stay relaxed and still.
 - The device records your neutral baseline automatically.
 
-**[2/6] LOOK LEFT**
+**[2/7] LOOK LEFT**
 
 ```text
-[2/6] LOOK LEFT — Press ENTER when ready, then look left.
+[2/7] LOOK LEFT — Press ENTER when ready, then look left.
 ```
 
 - Press Enter in Serial Monitor.
 - Look left and hold for about 2 seconds.
 - A comfortable gaze is enough; do not strain.
 
-**[3/6] LOOK RIGHT**
+**[3/7] LOOK RIGHT**
 
 - Press Enter.
 - Look right and hold for about 2 seconds.
 
-**[4/6] LOOK UP**
+**[4/7] LOOK UP**
 
 - Press Enter.
 - Look up and hold for about 2 seconds.
 
-**[5/6] BLINK**
+**[5/7] LOOK DOWN**
 
 ```text
-[5/6] BLINK — Press ENTER, then blink 3 times.
+[5/7] LOOK DOWN — Press ENTER, then look down.
+```
+
+- Press Enter.
+- Look down and hold for about 2 seconds.
+
+**[6/7] BLINK**
+
+```text
+[6/7] BLINK — Press ENTER, then blink 3 times.
 ```
 
 - Press Enter.
 - Blink normally three times.
 - A natural blink speed works best.
 
-**[6/6] CLENCH JAW**
+**[7/7] CLENCH JAW**
 
 ```text
-[6/6] CLENCH JAW — Press ENTER, then clench your jaw (1 s).
+[7/7] CLENCH JAW — Press ENTER, then clench your jaw (1 s).
 ```
 
 - Press Enter.
@@ -398,6 +409,8 @@ With Serial Monitor open at `115200`, type a letter and press Enter:
 | Solid on | Left button is being held for drag mode |
 | Off | Normal operation |
 
+LED feedback is non-blocking, so click indication no longer stalls cursor updates.
+
 ---
 
 ## 11. Fine Tuning with `config.h`
@@ -425,6 +438,8 @@ Edit `config.h` if you want to change sensitivity or timing.
 
 ```cpp
 #define SCROLL_HOLD_MS     600  // Gaze hold time before scroll starts
+#define SCROLL_REPEAT_MS   120  // Repeat interval while scrolling
+#define SCROLL_TRIGGER_RATIO 0.60f // Portion of calibrated up/down threshold
 #define SCROLL_SPEED         3  // Scroll ticks per trigger
 ```
 
@@ -432,6 +447,7 @@ Edit `config.h` if you want to change sensitivity or timing.
 
 ```cpp
 #define CLENCH_MIN_MS      150  // Shorter than this = ignored
+#define CLENCH_HOLD_MS     600  // Longer than this = hold left click
 // 150-600 ms -> middle click
 // >600 ms    -> hold left click
 ```
@@ -443,6 +459,15 @@ Edit `config.h` if you want to change sensitivity or timing.
 #define QUALITY_WINDOW     64   // Noise estimation window
 #define DEADZONE_Q5        40   // Deadzone when quality is excellent
 #define DEADZONE_Q1        90   // Deadzone when quality is very poor
+```
+
+### Calibration safeguards
+
+```cpp
+#define CAL_MIN_GAZE_H     45   // Reject too-small horizontal calibration peaks
+#define CAL_MIN_GAZE_V     40   // Reject too-small vertical calibration peaks
+#define CAL_MIN_BLINK      40   // Minimum blink threshold
+#define CAL_MIN_CLENCH     20   // Minimum jaw-clench threshold
 ```
 
 ---
@@ -459,7 +484,7 @@ Fix: send `B` in Serial Monitor to refresh baseline.
 
 Cause 1: blink threshold was calibrated too high.
 
-Fix: run `R` and blink more clearly during step `[5/6]`.
+Fix: run `R` and blink more clearly during step `[6/7]`.
 
 Cause 2: the vertical electrodes are misplaced.
 
@@ -562,7 +587,7 @@ HID-BCI/
 | 6-7 | int16 | Left-gaze threshold |
 | 8-9 | int16 | Right-gaze threshold |
 | 10-11 | int16 | Up-gaze threshold |
-| 12-13 | int16 | Down-gaze threshold (reserved/default) |
+| 12-13 | int16 | Down-gaze threshold |
 | 14-15 | int16 | Blink threshold |
 | 16-17 | int16 | Jaw-clench threshold |
 | 20-21 | int16 | Horizontal channel noise floor |
@@ -577,6 +602,6 @@ HID-BCI/
 2. Place the 6 electrodes with conductive gel
 3. Connect the board by USB
 4. Open HID-BCI.ino in Arduino IDE and upload
-5. Open Serial Monitor at 115200 and complete the 6 calibration steps
+5. Open Serial Monitor at 115200 and complete the 7 calibration steps
 6. Use gaze, blinks, and jaw clenches like a mouse
 ```

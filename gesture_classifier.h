@@ -46,6 +46,9 @@ public:
 
     // Call every MOUSE_UPDATE_MS with current filtered values
     Gesture update(float h_eog, float v_eog, float emg_env, uint32_t now_ms) {
+        dx = 0;
+        dy = 0;
+
         // ── Lead-off: freeze ──
         if (_lead_off) return GESTURE_NONE;
 
@@ -66,8 +69,8 @@ public:
 
         // ── Scroll mode: sustained vertical gaze ──
         if (_inScrollMode(v_eog, now_ms)) {
-            if (v_eog > cal.v_up * 0.6f)  return GESTURE_SCROLL_UP;
-            if (v_eog < cal.v_down * 0.6f) return GESTURE_SCROLL_DOWN;
+            if (v_eog > cal.v_up * SCROLL_TRIGGER_RATIO)   return GESTURE_SCROLL_UP;
+            if (v_eog < cal.v_down * SCROLL_TRIGGER_RATIO) return GESTURE_SCROLL_DOWN;
         }
 
         // ── Cursor movement (proportional EOG → mouse delta) ──
@@ -96,8 +99,6 @@ private:
 
     // ── Scroll mode ──
     uint32_t _gaze_v_start   = 0;
-    float    _last_v         = 0;
-
     // ── Lead off ──
     bool _lead_off = false;
 
@@ -162,15 +163,15 @@ private:
             uint32_t dur = now_ms - _clench_t0;
             _clench_active = false;
 
-            if (dur >= CLENCH_MIN_MS && dur < 600) {
+            if (dur >= CLENCH_MIN_MS && dur < CLENCH_HOLD_MS) {
                 // Short clench → middle click
                 return GESTURE_CLICK_M;
             }
             // Long clench handled below
         }
 
-        // Sustained clench (>600ms) → hold left button
-        if (_clench_active && (now_ms - _clench_t0 > 600) && !_holding_l) {
+        // Sustained clench → hold left button
+        if (_clench_active && (now_ms - _clench_t0 > CLENCH_HOLD_MS) && !_holding_l) {
             _holding_l = true;
             return GESTURE_HOLD_L;
         }
@@ -180,7 +181,8 @@ private:
 
     // ─────────────────────────────────────────────────────────────────────────
     bool _inScrollMode(float v_eog, uint32_t now_ms) {
-        bool strong_vertical = (v_eog > cal.v_up * 0.6f) || (v_eog < cal.v_down * 0.6f);
+        bool strong_vertical = (v_eog > cal.v_up * SCROLL_TRIGGER_RATIO) ||
+                               (v_eog < cal.v_down * SCROLL_TRIGGER_RATIO);
         if (strong_vertical) {
             if (_gaze_v_start == 0) _gaze_v_start = now_ms;
             return (now_ms - _gaze_v_start) > SCROLL_HOLD_MS;

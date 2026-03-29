@@ -52,8 +52,11 @@
 #define BLINK_MAX_MS          250   // too long = sustained squint
 #define DOUBLE_BLINK_GAP_MS   350   // max gap between two blinks
 #define CLENCH_MIN_MS         150   // minimum jaw clench duration
+#define CLENCH_HOLD_MS        600   // sustained clench becomes hold-left
 #define DEBOUNCE_MS           80    // gesture lockout after click
 #define SCROLL_HOLD_MS        600   // hold gaze up/down this long → scroll mode
+#define SCROLL_REPEAT_MS      120   // repeat interval while scrolling
+#define SCROLL_TRIGGER_RATIO  0.60f // percentage of calibrated gaze threshold
 
 // ─── Mouse Movement ───────────────────────────────────────────────────────────
 #define MOUSE_DEADZONE        40    // ADC counts below which cursor doesn't move
@@ -68,6 +71,12 @@
 #define CAL_SAMPLES           (SAMPLE_RATE_HZ * CAL_GESTURE_MS / 1000)
 #define EEPROM_H_NOISE_ADDR   20   // int16_t H channel noise floor (std dev)
 #define EEPROM_V_NOISE_ADDR   22   // int16_t V channel noise floor
+#define CAL_MIN_GAZE_H        45   // minimum usable horizontal gaze magnitude
+#define CAL_MIN_GAZE_V        40   // minimum usable vertical gaze magnitude
+#define CAL_MIN_BLINK         40   // minimum blink trigger threshold
+#define CAL_MIN_CLENCH        20   // minimum jaw-clench threshold
+#define CAL_BLINK_RATIO       0.60f
+#define CAL_CLENCH_RATIO      0.50f
 
 // ─── Signal Quality ───────────────────────────────────────────────────────────
 // Quality score 0-5 (0=lead off, 5=excellent)
@@ -82,4 +91,4 @@
 #define DEADZONE_Q1           90   // very poor signal
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────
-#define CAL_VERSION           0x04  // increment when EEPROM layout changes
+#define CAL_VERSION           0x05  // increment when calibration semantics change

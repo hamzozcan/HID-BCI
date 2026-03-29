@@ -141,7 +141,9 @@ void loop() {
         hChannel.update(analogRead(PIN_H_EOG), hLoP, hLoM);
         vChannel.update(analogRead(PIN_V_EOG), vLoP, vLoM);
 
-        classifier.setLeadOff(hChannel.lead_off || vChannel.lead_off);
+        bool leadOff = hChannel.lead_off || vChannel.lead_off;
+        classifier.setLeadOff(leadOff);
+        mouse.setLeadOff(leadOff);
 
         if (_debug) _printDebug();
     }
@@ -158,10 +160,6 @@ void loop() {
         Gesture g = classifier.update(hChannel.eog, vChannel.eog, hChannel.emg_env, now_ms);
         mouse.handle(g, classifier.dx, classifier.dy, now_ms);
 
-        // LED: fast blink when an electrode is disconnected
-        if (hChannel.lead_off || vChannel.lead_off) {
-            digitalWrite(PIN_LED, (now_ms / 100) & 1);
-        }
     }
 
     // ── 4. Automatic quality report every 5 seconds ─────────────────────────
@@ -180,6 +178,7 @@ void _printCalib() {
     Serial.print(F("  left="));  Serial.print(c.h_left);
     Serial.print(F("  right=")); Serial.print(c.h_right);
     Serial.print(F("  up="));    Serial.print(c.v_up);
+    Serial.print(F("  down="));  Serial.print(c.v_down);
     Serial.print(F("  blink=")); Serial.print(c.blink);
     Serial.print(F("  clench="));Serial.println(c.clench);
     Serial.println(F("-------------------"));

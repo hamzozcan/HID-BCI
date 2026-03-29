@@ -51,13 +51,13 @@ public:
     static void runWizard(SignalChannel& hCh, SignalChannel& vCh, CalibData& cal,
                           int16_t& h_noise_out, int16_t& v_noise_out) {
         Serial.println(F("\n╔═══════════════════════════════════════╗"));
-        Serial.println(F("║   HID-BCI Calibration Wizard v1       ║"));
+        Serial.println(F("║   HID-BCI Calibration Wizard v2       ║"));
         Serial.println(F("╚═══════════════════════════════════════╝"));
         Serial.println(F("Attach the electrodes and press ENTER when ready."));
         _waitEnter();
 
         // ── Step 1: Baseline + Noise Floor ──────────────────────────────────
-        Serial.println(F("\n[1/6] BASELINE  — Look straight ahead and relax."));
+        Serial.println(F("\n[1/7] BASELINE  — Look straight ahead and relax."));
         Serial.println(F("      Measuring for 2 seconds..."));
         delay(500);
         int16_t hBase = _recordMean(PIN_H_EOG, CAL_BASELINE_MS);
@@ -81,45 +81,56 @@ public:
         Serial.print(F("  V=")); Serial.println(vNoise);
 
         // ── Step 2: Gaze LEFT ─────────────────────────────────────────────────
-        Serial.println(F("\n[2/6] LOOK LEFT — Press ENTER when ready, then look left."));
+        Serial.println(F("\n[2/7] LOOK LEFT — Press ENTER when ready, then look left."));
         _waitEnter();
         _recordingPrompt();
         int16_t hLeft = _recordPeak(PIN_H_EOG, hBase, false, CAL_GESTURE_MS);
+        if (hLeft > -CAL_MIN_GAZE_H) hLeft = -DEFAULT_GAZE_H;
         cal.h_left = hLeft;
         Serial.print(F("  Left threshold: ")); Serial.println(hLeft);
 
         // ── Step 3: Gaze RIGHT ────────────────────────────────────────────────
-        Serial.println(F("\n[3/6] LOOK RIGHT — Press ENTER, then look right."));
+        Serial.println(F("\n[3/7] LOOK RIGHT — Press ENTER, then look right."));
         _waitEnter();
         _recordingPrompt();
         int16_t hRight = _recordPeak(PIN_H_EOG, hBase, true, CAL_GESTURE_MS);
+        if (hRight < CAL_MIN_GAZE_H) hRight = DEFAULT_GAZE_H;
         cal.h_right = hRight;
         Serial.print(F("  Right threshold: ")); Serial.println(hRight);
 
         // ── Step 4: Gaze UP ───────────────────────────────────────────────────
-        Serial.println(F("\n[4/6] LOOK UP — Press ENTER, then look up."));
+        Serial.println(F("\n[4/7] LOOK UP — Press ENTER, then look up."));
         _waitEnter();
         _recordingPrompt();
         int16_t vUp = _recordPeak(PIN_V_EOG, vBase, true, CAL_GESTURE_MS);
+        if (vUp < CAL_MIN_GAZE_V) vUp = DEFAULT_GAZE_V;
         cal.v_up = vUp;
         Serial.print(F("  Up threshold: ")); Serial.println(vUp);
 
-        // ── Step 5: Blink ─────────────────────────────────────────────────────
-        Serial.println(F("\n[5/6] BLINK — Press ENTER, then blink 3 times."));
+        // ── Step 5: Gaze DOWN ─────────────────────────────────────────────────
+        Serial.println(F("\n[5/7] LOOK DOWN — Press ENTER, then look down."));
+        _waitEnter();
+        _recordingPrompt();
+        int16_t vDown = _recordPeak(PIN_V_EOG, vBase, false, CAL_GESTURE_MS);
+        if (vDown > -CAL_MIN_GAZE_V) vDown = -DEFAULT_GAZE_V;
+        cal.v_down = vDown;
+        Serial.print(F("  Down threshold: ")); Serial.println(vDown);
+
+        // ── Step 6: Blink ─────────────────────────────────────────────────────
+        Serial.println(F("\n[6/7] BLINK — Press ENTER, then blink 3 times."));
         _waitEnter();
         _recordingPrompt();
         int16_t blinkPeak = _recordPeak(PIN_V_EOG, vBase, true, CAL_GESTURE_MS);
         // Blink threshold = 60% of peak (conservative)
-        cal.blink = (int16_t)(blinkPeak * 0.6f);
-        if (cal.blink < 40) cal.blink = 40;
+        cal.blink = max((int16_t)(blinkPeak * CAL_BLINK_RATIO), (int16_t)CAL_MIN_BLINK);
         Serial.print(F("  Blink threshold: ")); Serial.println(cal.blink);
 
-        // ── Step 6: Jaw Clench ────────────────────────────────────────────────
-        Serial.println(F("\n[6/6] CLENCH JAW — Press ENTER, then clench your jaw (1 s)."));
+        // ── Step 7: Jaw Clench ────────────────────────────────────────────────
+        Serial.println(F("\n[7/7] CLENCH JAW — Press ENTER, then clench your jaw (1 s)."));
         _waitEnter();
         _recordingPrompt();
         int16_t clenchRMS = _recordRMS(PIN_H_EOG, hBase, CAL_GESTURE_MS);
-        cal.clench = max(clenchRMS / 2, (int16_t)20);
+        cal.clench = max((int16_t)(clenchRMS * CAL_CLENCH_RATIO), (int16_t)CAL_MIN_CLENCH);
         Serial.print(F("  Jaw threshold (RMS): ")); Serial.println(cal.clench);
 
         // ── Save ──────────────────────────────────────────────────────────────

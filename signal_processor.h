@@ -20,8 +20,8 @@ public:
     uint8_t  deadzone    = DEADZONE_Q5; // adaptive deadzone based on quality
 
     SignalChannel() {
-        for (uint8_t i = 0; i < MA_WINDOW; i++) _ma_buf[i] = 512;
-        for (uint8_t i = 0; i < QUALITY_WINDOW; i++) _q_buf[i] = 0;
+        _primeMovingAverage(baseline);
+        _clearQualityWindow();
     }
 
     // Called at 250 Hz. lo_p/lo_m are the lead-off detect pins.
@@ -30,11 +30,11 @@ public:
         if (lead_off) { quality = 0; deadzone = DEADZONE_Q1; _reset(); return; }
 
         // ── Moving-average prefilter ────────────────────────────────────────
+        _ma_sum -= _ma_buf[_ma_idx];
         _ma_buf[_ma_idx] = adc_raw;
+        _ma_sum += adc_raw;
         _ma_idx = (_ma_idx + 1) % MA_WINDOW;
-        float ma = 0;
-        for (uint8_t i = 0; i < MA_WINDOW; i++) ma += _ma_buf[i];
-        float smoothed = ma / MA_WINDOW;
+        float smoothed = (float)_ma_sum / MA_WINDOW;
 
         // ── 1st-order Butterworth LP (EOG channel) ─────────────────────────
         float centered = smoothed - baseline;
@@ -67,8 +67,11 @@ public:
         _hp_prev  = val;
         emg_env   = 0;
         eog       = 0;
-        _q_sum_sq = 0;
-        for (uint8_t i = 0; i < QUALITY_WINDOW; i++) _q_buf[i] = 0;
+        quality   = 0;
+        deadzone  = DEADZONE_Q5;
+        noise_rms = 0;
+        _primeMovingAverage(val);
+        _clearQualityWindow();
     }
 
     // Store the noise floor during calibration (call during the baseline step)
@@ -126,6 +129,7 @@ private:
     float   _lp_prev  = 0;
     float   _hp_prev  = 512;
     int16_t _ma_buf[MA_WINDOW]      = {};
+    int32_t _ma_sum                 = 0;
     uint8_t _ma_idx                 = 0;
 
     // ── Quality: rolling RMS window ────────────────────────────────────────
@@ -139,7 +143,24 @@ private:
         _hp_prev  = baseline;
         emg_env   = 0;
         eog       = 0;
+        _primeMovingAverage(baseline);
+        _clearQualityWindow();
         noise_rms = 999;
+    }
+
+    void _primeMovingAverage(int16_t seed) {
+        _ma_sum = 0;
+        _ma_idx = 0;
+        for (uint8_t i = 0; i < MA_WINDOW; i++) {
+            _ma_buf[i] = seed;
+            _ma_sum += seed;
+        }
+    }
+
+    void _clearQualityWindow() {
+        _q_sum_sq = 0;
+        _q_idx    = 0;
+        for (uint8_t i = 0; i < QUALITY_WINDOW; i++) _q_buf[i] = 0;
     }
 
     void _updateQuality() {
