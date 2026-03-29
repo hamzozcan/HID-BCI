@@ -37,7 +37,7 @@
 #define LP_ALPHA_EOG          0.239f   // Butterworth 1st-order @ 10Hz / 250Hz
 // High-pass for EMG (jaw clench): removes baseline drift
 #define HP_ALPHA_EMG          0.95f
-// Moving-average window for smooth cursor (10 = daha pürüzsüz)
+// Moving-average window for smoother cursor motion (10 = smoother)
 #define MA_WINDOW             10
 
 // ─── Gesture Thresholds (overridden by calibration) ──────────────────────────
@@ -69,17 +69,17 @@
 #define EEPROM_H_NOISE_ADDR   20   // int16_t H channel noise floor (std dev)
 #define EEPROM_V_NOISE_ADDR   22   // int16_t V channel noise floor
 
-// ─── Sinyal Kalitesi ──────────────────────────────────────────────────────────
-// Kalite skoru 0-5 (0=elektrot kopuk, 5=mükemmel)
-#define QUALITY_WINDOW        64   // rolling variance penceresi (örnekler)
-#define QUALITY_PRINT_MS      5000 // kaç ms'de bir kalite skoru yazdır
+// ─── Signal Quality ───────────────────────────────────────────────────────────
+// Quality score 0-5 (0=lead off, 5=excellent)
+#define QUALITY_WINDOW        64   // rolling variance window (samples)
+#define QUALITY_PRINT_MS      5000 // print quality score every N ms
 
-// Adaptive deadzone: kalite düştükçe deadzone artar (titreme bastırma)
-#define DEADZONE_Q5           40   // mükemmel
+// Adaptive deadzone: increase deadzone as quality drops to suppress jitter
+#define DEADZONE_Q5           40   // excellent
 #define DEADZONE_Q4           48
 #define DEADZONE_Q3           58
 #define DEADZONE_Q2           70
-#define DEADZONE_Q1           90   // çok kötü sinyal
+#define DEADZONE_Q1           90   // very poor signal
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────
 #define CAL_VERSION           0x04  // increment when EEPROM layout changes

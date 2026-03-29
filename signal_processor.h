@@ -13,42 +13,42 @@ public:
     float    raw_hp      = 0;    // HP filtered raw value
     bool     lead_off    = false;
 
-    // Kalite sistemi
-    uint8_t  quality     = 0;    // 0=kopuk, 1=çok kötü … 5=mükemmel
+    // Quality system
+    uint8_t  quality     = 0;    // 0=lead off, 1=very poor ... 5=excellent
     float    noise_rms   = 0;    // rolling noise RMS (ADC counts)
-    int16_t  noise_floor = 8;    // kalibrasyon sırasında ölçülen beklenen gürültü
-    uint8_t  deadzone    = DEADZONE_Q5; // adaptive deadzone (kaliteye göre)
+    int16_t  noise_floor = 8;    // expected noise measured during calibration
+    uint8_t  deadzone    = DEADZONE_Q5; // adaptive deadzone based on quality
 
     SignalChannel() {
         for (uint8_t i = 0; i < MA_WINDOW; i++) _ma_buf[i] = 512;
         for (uint8_t i = 0; i < QUALITY_WINDOW; i++) _q_buf[i] = 0;
     }
 
-    // 250 Hz'de çağrılır. lo_p/lo_m: lead-off detect pinleri
+    // Called at 250 Hz. lo_p/lo_m are the lead-off detect pins.
     void update(int16_t adc_raw, bool lo_p, bool lo_m) {
         lead_off = lo_p || lo_m;
         if (lead_off) { quality = 0; deadzone = DEADZONE_Q1; _reset(); return; }
 
-        // ── Moving-average ön-filtresi ──────────────────────────────────────
+        // ── Moving-average prefilter ────────────────────────────────────────
         _ma_buf[_ma_idx] = adc_raw;
         _ma_idx = (_ma_idx + 1) % MA_WINDOW;
         float ma = 0;
         for (uint8_t i = 0; i < MA_WINDOW; i++) ma += _ma_buf[i];
         float smoothed = ma / MA_WINDOW;
 
-        // ── 1st-order Butterworth LP (EOG kanalı) ──────────────────────────
+        // ── 1st-order Butterworth LP (EOG channel) ─────────────────────────
         float centered = smoothed - baseline;
         _lp_prev = LP_ALPHA_EOG * centered + (1.0f - LP_ALPHA_EOG) * _lp_prev;
         eog = _lp_prev;
 
-        // ── High-pass filtresi (EMG: temporal kas / çene) ──────────────────
+        // ── High-pass filter (EMG: temple muscle / jaw) ────────────────────
         raw_hp   = HP_ALPHA_EMG * (raw_hp + smoothed - _hp_prev);
         _hp_prev = smoothed;
 
-        // ── EMG envelope (yarı dalga doğrulama + LP) ───────────────────────
+        // ── EMG envelope (half-wave rectification + LP) ────────────────────
         emg_env  = 0.1f * fabsf(raw_hp) + 0.9f * emg_env;
 
-        // ── Rolling noise RMS (ham sinyal - baseline, QUALITY_WINDOW örnekli) ──
+        // ── Rolling noise RMS (raw signal - baseline, QUALITY_WINDOW samples) ──
         float diff = adc_raw - baseline;
         _q_sum_sq -= (float)_q_buf[_q_idx] * _q_buf[_q_idx];
         _q_buf[_q_idx] = (int16_t)diff;
@@ -56,7 +56,7 @@ public:
         _q_idx = (_q_idx + 1) % QUALITY_WINDOW;
         noise_rms = sqrtf(_q_sum_sq / QUALITY_WINDOW);
 
-        // ── Kalite skoru hesapla ────────────────────────────────────────────
+        // ── Update quality score ────────────────────────────────────────────
         _updateQuality();
     }
 
@@ -71,13 +71,13 @@ public:
         for (uint8_t i = 0; i < QUALITY_WINDOW; i++) _q_buf[i] = 0;
     }
 
-    // Kalibrasyon sırasında gürültü tabanını kaydet (baseline aşamasında çağrılır)
+    // Store the noise floor during calibration (call during the baseline step)
     void calibrateNoiseFloor() {
-        // noise_rms şu anki rolling değeri — bu kalibrasyondan hemen sonra çağrılmalı
+        // noise_rms is the current rolling value; call this right after calibration
         noise_floor = max((int16_t)noise_rms, (int16_t)4);
     }
 
-    // Kalite skoru metnini döner ("★★★★☆ (4/5) - İyi" formatı)
+    // Print the quality score text ("★★★★☆ (4/5)" style)
     void printQuality(const char* label) const {
         Serial.print(label);
         Serial.print(F(": "));
@@ -91,11 +91,11 @@ public:
         Serial.print(noise_floor);
         Serial.print(F("  dz="));
         Serial.print(deadzone);
-        if (lead_off) Serial.print(F("  [KOPUK!]"));
+        if (lead_off) Serial.print(F("  [LEAD OFF!]"));
         Serial.println();
     }
 
-    // Static yardımcılar (Trainer tarafından kullanılır)
+    // Static helpers (used by Trainer)
     static float computeRMS(int16_t* buf, uint16_t len, int16_t base) {
         float acc = 0;
         for (uint16_t i = 0; i < len; i++) {
@@ -122,13 +122,13 @@ public:
     }
 
 private:
-    // ── Filtre durumları ────────────────────────────────────────────────────
+    // ── Filter state ────────────────────────────────────────────────────────
     float   _lp_prev  = 0;
     float   _hp_prev  = 512;
     int16_t _ma_buf[MA_WINDOW]      = {};
     uint8_t _ma_idx                 = 0;
 
-    // ── Kalite: rolling RMS penceresi ───────────────────────────────────────
+    // ── Quality: rolling RMS window ────────────────────────────────────────
     int16_t _q_buf[QUALITY_WINDOW]  = {};
     uint8_t _q_idx                  = 0;
     float   _q_sum_sq               = 0;
@@ -143,7 +143,7 @@ private:
     }
 
     void _updateQuality() {
-        // Gürültü / beklenen gürültü oranına göre skor
+        // Score based on the ratio of measured noise to expected noise
         float ratio = noise_rms / max((float)noise_floor, 1.0f);
 
         if      (ratio < 1.5f)  { quality = 5; deadzone = DEADZONE_Q5; }

@@ -47,18 +47,18 @@ public:
         EEPROM.put(EEPROM_V_NOISE_ADDR, v_noise);
     }
 
-    // ─── Full calibration wizard (blocks — call from setup() or on demand) ────
+    // ─── Full calibration wizard (blocking; call from setup() or on demand) ───
     static void runWizard(SignalChannel& hCh, SignalChannel& vCh, CalibData& cal,
                           int16_t& h_noise_out, int16_t& v_noise_out) {
         Serial.println(F("\n╔═══════════════════════════════════════╗"));
-        Serial.println(F("║   HID-BCI Kalibrasyon Sihirbazı v1    ║"));
+        Serial.println(F("║   HID-BCI Calibration Wizard v1       ║"));
         Serial.println(F("╚═══════════════════════════════════════╝"));
-        Serial.println(F("Elektrotları takın ve hazır olunca ENTER'a basın."));
+        Serial.println(F("Attach the electrodes and press ENTER when ready."));
         _waitEnter();
 
-        // ── Step 1: Baseline + Gürültü Tabanı ────────────────────────────────
-        Serial.println(F("\n[1/6] BASELINE  — Gözlerinize düz bakın, rahat olun."));
-        Serial.println(F("      2 saniye boyunca ölçüm yapılıyor..."));
+        // ── Step 1: Baseline + Noise Floor ──────────────────────────────────
+        Serial.println(F("\n[1/6] BASELINE  — Look straight ahead and relax."));
+        Serial.println(F("      Measuring for 2 seconds..."));
         delay(500);
         int16_t hBase = _recordMean(PIN_H_EOG, CAL_BASELINE_MS);
         int16_t vBase = _recordMean(PIN_V_EOG, CAL_BASELINE_MS);
@@ -67,7 +67,7 @@ public:
         hCh.setBaseline(hBase);
         vCh.setBaseline(vBase);
 
-        // Gürültü tabanını ölç (elektrot teması kalitesini referans al)
+        // Measure the noise floor to estimate electrode contact quality
         int16_t hNoise = max(_recordNoise(PIN_H_EOG, hBase, 1000), (int16_t)4);
         int16_t vNoise = max(_recordNoise(PIN_V_EOG, vBase, 1000), (int16_t)4);
         hCh.noise_floor = hNoise;
@@ -77,61 +77,61 @@ public:
 
         Serial.print(F("  Baseline H=")); Serial.print(hBase);
         Serial.print(F("  V=")); Serial.print(vBase);
-        Serial.print(F("  Gürültü H=")); Serial.print(hNoise);
+        Serial.print(F("  Noise H=")); Serial.print(hNoise);
         Serial.print(F("  V=")); Serial.println(vNoise);
 
         // ── Step 2: Gaze LEFT ─────────────────────────────────────────────────
-        Serial.println(F("\n[2/6] SOLA BAK — Hazır olunca ENTER'a basın, sonra sola bakın."));
+        Serial.println(F("\n[2/6] LOOK LEFT — Press ENTER when ready, then look left."));
         _waitEnter();
         _recordingPrompt();
         int16_t hLeft = _recordPeak(PIN_H_EOG, hBase, false, CAL_GESTURE_MS);
         cal.h_left = hLeft;
-        Serial.print(F("  Sol eşiği: ")); Serial.println(hLeft);
+        Serial.print(F("  Left threshold: ")); Serial.println(hLeft);
 
         // ── Step 3: Gaze RIGHT ────────────────────────────────────────────────
-        Serial.println(F("\n[3/6] SAĞA BAK — ENTER'a basın, sonra sağa bakın."));
+        Serial.println(F("\n[3/6] LOOK RIGHT — Press ENTER, then look right."));
         _waitEnter();
         _recordingPrompt();
         int16_t hRight = _recordPeak(PIN_H_EOG, hBase, true, CAL_GESTURE_MS);
         cal.h_right = hRight;
-        Serial.print(F("  Sağ eşiği: ")); Serial.println(hRight);
+        Serial.print(F("  Right threshold: ")); Serial.println(hRight);
 
         // ── Step 4: Gaze UP ───────────────────────────────────────────────────
-        Serial.println(F("\n[4/6] YUKARI BAK — ENTER'a basın, sonra yukarı bakın."));
+        Serial.println(F("\n[4/6] LOOK UP — Press ENTER, then look up."));
         _waitEnter();
         _recordingPrompt();
         int16_t vUp = _recordPeak(PIN_V_EOG, vBase, true, CAL_GESTURE_MS);
         cal.v_up = vUp;
-        Serial.print(F("  Yukarı eşiği: ")); Serial.println(vUp);
+        Serial.print(F("  Up threshold: ")); Serial.println(vUp);
 
         // ── Step 5: Blink ─────────────────────────────────────────────────────
-        Serial.println(F("\n[5/6] GÖZ KIRP — ENTER'a basın, sonra 3 kez göz kırpın."));
+        Serial.println(F("\n[5/6] BLINK — Press ENTER, then blink 3 times."));
         _waitEnter();
         _recordingPrompt();
         int16_t blinkPeak = _recordPeak(PIN_V_EOG, vBase, true, CAL_GESTURE_MS);
         // Blink threshold = 60% of peak (conservative)
         cal.blink = (int16_t)(blinkPeak * 0.6f);
         if (cal.blink < 40) cal.blink = 40;
-        Serial.print(F("  Kırpma eşiği: ")); Serial.println(cal.blink);
+        Serial.print(F("  Blink threshold: ")); Serial.println(cal.blink);
 
         // ── Step 6: Jaw Clench ────────────────────────────────────────────────
-        Serial.println(F("\n[6/6] ÇENE SIK — ENTER'a basın, sonra çenenizi sıkın (1 sn)."));
+        Serial.println(F("\n[6/6] CLENCH JAW — Press ENTER, then clench your jaw (1 s)."));
         _waitEnter();
         _recordingPrompt();
         int16_t clenchRMS = _recordRMS(PIN_H_EOG, hBase, CAL_GESTURE_MS);
         cal.clench = max(clenchRMS / 2, (int16_t)20);
-        Serial.print(F("  Çene eşiği (RMS): ")); Serial.println(cal.clench);
+        Serial.print(F("  Jaw threshold (RMS): ")); Serial.println(cal.clench);
 
         // ── Save ──────────────────────────────────────────────────────────────
         save(cal, h_noise_out, v_noise_out);
-        Serial.println(F("\n✓ Kalibrasyon tamamlandı ve EEPROM'a kaydedildi."));
-        Serial.println(F("  Mouse kontrolü aktif."));
-        Serial.println(F("  Komutlar: R=kalibrasyon  B=baseline  Q=kalite skoru  D=debug\n"));
+        Serial.println(F("\n✓ Calibration complete and saved to EEPROM."));
+        Serial.println(F("  Mouse control active."));
+        Serial.println(F("  Commands: R=calibration  B=baseline  Q=quality  D=debug\n"));
     }
 
-    // Quick re-calibration: baseline + gürültü tabanı güncelle
+    // Quick re-calibration: update baseline + noise floor
     static void recalBaseline(SignalChannel& hCh, SignalChannel& vCh, CalibData& cal) {
-        Serial.println(F("\n[Hızlı Baseline] Düz bakın..."));
+        Serial.println(F("\n[Quick Baseline] Look straight ahead..."));
         delay(1000);
         int16_t hBase = _recordMean(PIN_H_EOG, 1500);
         int16_t vBase = _recordMean(PIN_V_EOG, 1500);
@@ -150,9 +150,9 @@ public:
         EEPROM.put(EEPROM_H_NOISE_ADDR, hNoise);
         EEPROM.put(EEPROM_V_NOISE_ADDR, vNoise);
 
-        Serial.print(F("Baseline güncellendi. H=")); Serial.print(hBase);
+        Serial.print(F("Baseline updated. H=")); Serial.print(hBase);
         Serial.print(F("  V=")); Serial.print(vBase);
-        Serial.print(F("  Gürültü H=")); Serial.print(hNoise);
+        Serial.print(F("  Noise H=")); Serial.print(hNoise);
         Serial.print(F("  V=")); Serial.println(vNoise);
     }
 
@@ -168,7 +168,7 @@ private:
     }
 
     static void _recordingPrompt() {
-        Serial.println(F("  *** KAYIT BAŞLIYOR ***"));
+        Serial.println(F("  *** RECORDING STARTS ***"));
         for (uint8_t i = 3; i > 0; i--) {
             Serial.print(i); Serial.println(F("..."));
             delay(400);
@@ -201,7 +201,7 @@ private:
         return peak;
     }
 
-    // Gürültü tabanı: baseline etrafındaki RMS (sinyal hareketsizken)
+    // Noise floor: RMS around baseline while the signal is still
     static int16_t _recordNoise(uint8_t pin, int16_t base, uint16_t duration_ms) {
         uint32_t t0  = millis();
         int64_t  acc = 0;

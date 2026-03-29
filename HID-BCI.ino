@@ -2,30 +2,30 @@
 //  HID-BCI  —  EOG/EMG Mouse Controller  v2.0
 //  Hardware: Arduino Micro (ATmega32U4) + 2x AD8232
 //
-//  Elektrot Yerleşimi:
+//  Electrode Placement:
 //    AD8232 #1 (Horizontal EOG):
-//      IN+  → Sol şakak
-//      IN−  → Sağ şakak
-//      REF  → Kulak memesi veya alın merkezi (GND)
+//      IN+  → Left temple
+//      IN−  → Right temple
+//      REF  → Ear lobe or center forehead (GND)
 //
 //    AD8232 #2 (Vertical EOG + Blink):
-//      IN+  → Sol göz üstü (kaşın altı)
-//      IN−  → Sol göz altı (elmacık kemeri üstü)
-//      REF  → Aynı REF elektrotu (AD8232 #1 ile paylaşılabilir)
+//      IN+  → Above left eye (below eyebrow)
+//      IN−  → Below left eye (upper cheekbone)
+//      REF  → Same REF electrode (can be shared with AD8232 #1)
 //
-//  Gesturlar:
-//    • Sola/sağa/yukarı/aşağı bak → orantılı + ivmeli imleç hareketi
-//    • Tek göz kırp → sol tık
-//    • Çift göz kırp (< 350ms ara) → sağ tık
-//    • Kısa çene sık (150-600ms) → orta tık
-//    • Uzun çene sık (> 600ms) → sol tık basılı tut / bırak
-//    • Yukarı/aşağı bakışı 600ms tut → scroll
+//  Gestures:
+//    • Look left/right/up/down → proportional + accelerated cursor movement
+//    • Single blink → left click
+//    • Double blink (< 350 ms gap) → right click
+//    • Short jaw clench (150-600 ms) → middle click
+//    • Long jaw clench (> 600 ms) → hold / release left click
+//    • Hold upward/downward gaze for 600 ms → scroll
 //
-//  Serial Komutları (115200 baud):
-//    R → Tam yeniden kalibrasyon
-//    B → Sadece baseline yenile (elektrot konumu değişince)
-//    Q → Anlık kalite skoru göster
-//    D → Debug çıktısı aç/kapat
+//  Serial Commands (115200 baud):
+//    R → Full recalibration
+//    B → Refresh baseline only (after electrode repositioning)
+//    Q → Show current quality score
+//    D → Toggle debug output
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <Mouse.h>
@@ -63,14 +63,14 @@ void setup() {
     delay(1500);
 
     Serial.println(F("\n╔══════════════════════════╗"));
-    Serial.println(F("║  HID-BCI v2.0  Hazır     ║"));
+    Serial.println(F("║  HID-BCI v2.0  Ready     ║"));
     Serial.println(F("╚══════════════════════════╝"));
 
     int16_t hNoise = 8, vNoise = 8;
 
-    // ── Kalibrasyon yükle veya sihirbazı başlat ───────────────────────────────
+    // ── Load calibration or start the wizard ────────────────────────────────
     if (!Trainer::hasCalibration()) {
-        Serial.println(F("İlk açılış — kalibrasyon sihirbazı başlıyor."));
+        Serial.println(F("First boot - calibration wizard starting."));
         mouse.enabled = false;
         Trainer::runWizard(hChannel, vChannel, classifier.cal, hNoise, vNoise);
         mouse.enabled = true;
@@ -80,16 +80,16 @@ void setup() {
         vChannel.setBaseline(classifier.cal.v_base);
         hChannel.noise_floor = hNoise;
         vChannel.noise_floor = vNoise;
-        Serial.println(F("Kalibrasyon EEPROM'dan yüklendi."));
+        Serial.println(F("Calibration loaded from EEPROM."));
         _printCalib();
     }
 
     mouse.begin();
 
-    Serial.println(F("Mouse HID aktif."));
-    Serial.println(F("Komutlar: R=kalibrasyon  B=baseline  Q=kalite  D=debug\n"));
+    Serial.println(F("Mouse HID active."));
+    Serial.println(F("Commands: R=calibration  B=baseline  Q=quality  D=debug\n"));
 
-    // Hazır sinyali: 3 kısa yanıp sönme
+    // Ready signal: 3 short blinks
     for (uint8_t i = 0; i < 3; i++) {
         digitalWrite(PIN_LED, HIGH); delay(80);
         digitalWrite(PIN_LED, LOW);  delay(80);
@@ -101,13 +101,13 @@ void setup() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 void loop() {
-    // ── 1. Serial komutları ───────────────────────────────────────────────────
+    // ── 1. Serial commands ───────────────────────────────────────────────────
     if (Serial.available()) {
         char c = toupper(Serial.read());
         while (Serial.available()) Serial.read();
 
         if (c == 'R') {
-            Serial.println(F("Tam yeniden kalibrasyon başlatılıyor..."));
+            Serial.println(F("Starting full recalibration..."));
             mouse.releaseAll();
             mouse.enabled = false;
             int16_t hN = 8, vN = 8;
@@ -128,7 +128,7 @@ void loop() {
         }
     }
 
-    // ── 2. Örnekleme: 250 Hz ──────────────────────────────────────────────────
+    // ── 2. Sampling: 250 Hz ──────────────────────────────────────────────────
     uint32_t now_us = micros();
     if ((uint32_t)(now_us - _last_sample_us) >= SAMPLE_INTERVAL_US) {
         _last_sample_us = now_us;
@@ -146,25 +146,25 @@ void loop() {
         if (_debug) _printDebug();
     }
 
-    // ── 3. Gesture + Mouse: ~60 Hz ────────────────────────────────────────────
+    // ── 3. Gesture + Mouse: ~60 Hz ───────────────────────────────────────────
     uint32_t now_ms = millis();
     if ((uint32_t)(now_ms - _last_mouse_ms) >= MOUSE_UPDATE_MS) {
         _last_mouse_ms = now_ms;
 
-        // Adaptive deadzone: sinyalin o anki kalitesine göre ayarla
+        // Adaptive deadzone: adjust based on current signal quality
         uint8_t dz = max(hChannel.deadzone, vChannel.deadzone);
         classifier.setDeadzone(dz);
 
         Gesture g = classifier.update(hChannel.eog, vChannel.eog, hChannel.emg_env, now_ms);
         mouse.handle(g, classifier.dx, classifier.dy, now_ms);
 
-        // LED: elektrot kopuksa hızlı yanıp söner
+        // LED: fast blink when an electrode is disconnected
         if (hChannel.lead_off || vChannel.lead_off) {
             digitalWrite(PIN_LED, (now_ms / 100) & 1);
         }
     }
 
-    // ── 4. Otomatik kalite raporu: her 5 saniyede bir ─────────────────────────
+    // ── 4. Automatic quality report every 5 seconds ─────────────────────────
     if ((uint32_t)(now_ms - _last_quality_ms) >= QUALITY_PRINT_MS) {
         _last_quality_ms = now_ms;
         _printQuality();
@@ -174,7 +174,7 @@ void loop() {
 // ─────────────────────────────────────────────────────────────────────────────
 void _printCalib() {
     CalibData& c = classifier.cal;
-    Serial.println(F("--- Kalibrasyon ---"));
+    Serial.println(F("--- Calibration ---"));
     Serial.print(F("  H base=")); Serial.print(c.h_base);
     Serial.print(F("  V base=")); Serial.println(c.v_base);
     Serial.print(F("  left="));  Serial.print(c.h_left);
@@ -186,20 +186,20 @@ void _printCalib() {
 }
 
 void _printQuality() {
-    Serial.println(F("─── Sinyal Kalitesi ───"));
-    hChannel.printQuality("H (Yatay)");
-    vChannel.printQuality("V (Dikey) ");
+    Serial.println(F("─── Signal Quality ───"));
+    hChannel.printQuality("H (Horizontal)");
+    vChannel.printQuality("V (Vertical) ");
     uint8_t worst = min(hChannel.quality, vChannel.quality);
     const __FlashStringHelper* msg;
     switch (worst) {
-        case 5:  msg = F("Mükemmel — sistem tam verimde"); break;
-        case 4:  msg = F("İyi — normal kullanım"); break;
-        case 3:  msg = F("Orta — jel ekle veya elektrotu düzelt"); break;
-        case 2:  msg = F("Zayıf — 'B' ile baseline yenile önerilir"); break;
-        case 1:  msg = F("Çok Zayıf — elektrot temasını kontrol et!"); break;
-        default: msg = F("KOPUK — elektrot bağlantısı yok!"); break;
+        case 5:  msg = F("Excellent - full performance"); break;
+        case 4:  msg = F("Good - normal operation"); break;
+        case 3:  msg = F("Fair - add gel or adjust the electrode"); break;
+        case 2:  msg = F("Weak - baseline refresh with 'B' is recommended"); break;
+        case 1:  msg = F("Very Weak - check electrode contact"); break;
+        default: msg = F("LEAD OFF - no electrode connection"); break;
     }
-    Serial.print(F("Genel: ")); Serial.println(msg);
+    Serial.print(F("Overall: ")); Serial.println(msg);
     Serial.println(F("───────────────────────"));
 }
 
@@ -214,6 +214,6 @@ void _printDebug() {
     Serial.print(F(" Q=")); Serial.print(hChannel.quality);
     Serial.print(F("/"));   Serial.print(vChannel.quality);
     Serial.print(F(" dz=")); Serial.print(hChannel.deadzone);
-    if (hChannel.lead_off || vChannel.lead_off) Serial.print(F(" [KOPUK]"));
+    if (hChannel.lead_off || vChannel.lead_off) Serial.print(F(" [LEAD OFF]"));
     Serial.println();
 }
